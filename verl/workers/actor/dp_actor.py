@@ -490,6 +490,11 @@ class DataParallelPPOActor(BasePPOActor):
 
                     # all return: (bsz, response_length)
                     calculate_entropy = False
+
+                    assert not (
+                        entropy_coeff != 0 and self.config.use_entropy_advantage
+                        ), f"Cannot set entropy_coeff>0 and use_entropy_advantage=True at the same time. They are mutually exclusive."
+                    
                     if entropy_coeff != 0 or self.config.use_entropy_advantage:
                         calculate_entropy = True
                         if self.config.entropy_coeff_annealing == "linear":
