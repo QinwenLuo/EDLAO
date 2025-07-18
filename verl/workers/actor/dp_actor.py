@@ -492,12 +492,18 @@ class DataParallelPPOActor(BasePPOActor):
                     calculate_entropy = False
                     if entropy_coeff != 0 or self.config.use_entropy_advantage:
                         calculate_entropy = True
+                        if self.config.entropy_coeff_annealing == "linear":
+                            scale = 1 - global_steps / total_training_steps
+                        elif self.config.entropy_coeff_annealing == "cosine":
+                            import math
+                            scale = 0.5 * (1 + math.cos(math.pi * global_steps / total_training_steps))
+
                     entropy, log_prob = self._forward_micro_batch(
                         micro_batch=data, temperature=temperature, calculate_entropy=calculate_entropy
                     )
 
                     if self.config.use_entropy_advantage:
-                        advantages += torch.min(self.alpha * entropy.detach(), advantages.abs() / self.kappa)
+                        advantages += torch.min(self.alpha * entropy.detach(), advantages.abs() / self.kappa) * scale
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
@@ -526,13 +532,7 @@ class DataParallelPPOActor(BasePPOActor):
                         )
 
                     if entropy_coeff != 0:
-                        if self.config.entropy_coeff_annealing == "linear":
-                            entropy_coeff = entropy_coeff * (1 - global_steps / total_training_steps)
-                        elif self.config.entropy_coeff_annealing == "cosine":
-                            import math
-                            entropy_coeff = entropy_coeff * 0.5 * (
-                                        1 + math.cos(math.pi * global_steps / total_training_steps))
-
+                        entropy_coeff = scale * entropy_coeff
                         entropy_loss = agg_loss(loss_mat=entropy, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
 
                         # compute policy loss
