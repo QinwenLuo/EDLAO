@@ -78,9 +78,6 @@ class DataParallelPPOActor(BasePPOActor):
         )
         self.device_name = get_device_name()
 
-        self.alpha = self.config.entropy_advantage_alpha
-        self.kappa = self.config.entropy_advantage_kappa
-
     def _forward_micro_batch(
         self, micro_batch, temperature, calculate_entropy=False
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -508,7 +505,7 @@ class DataParallelPPOActor(BasePPOActor):
                     )
 
                     if self.config.use_entropy_advantage:
-                        advantages += torch.min(self.alpha * entropy.detach(), advantages.abs() / self.kappa) * scale
+                        advantages += torch.min(self.config.entropy_advantage_alpha * entropy.detach(), advantages.abs() / self.config.entropy_advantage_kappa) * scale
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
