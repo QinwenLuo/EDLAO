@@ -499,6 +499,8 @@ class DataParallelPPOActor(BasePPOActor):
                         elif self.config.entropy_coeff_annealing == "cosine":
                             import math
                             scale = 0.5 * (1 + math.cos(math.pi * global_steps / total_training_steps))
+                        else:
+                            scale = 1.0
 
                     entropy, log_prob = self._forward_micro_batch(
                         micro_batch=data, temperature=temperature, calculate_entropy=calculate_entropy

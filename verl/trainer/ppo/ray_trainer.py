@@ -391,7 +391,7 @@ class RayPPOTrainer:
 
         self.reward_scale = config.length_rewards.reward_scale
 
-        self.length_records = np.zeros((len(train_dataset) + 100, 1))
+        self.length_records = np.zeros((len(train_dataset) + 100, ))
 
         self.use_length_reward = config.length_rewards.use_length_reward
 
@@ -749,7 +749,6 @@ class RayPPOTrainer:
                 "do_sample": self.config.actor_rollout_ref.rollout.val_kwargs.do_sample,
                 "validate": True,
             }
-            print(f"test_gen_batch meta info: {test_gen_batch.meta_info}")
 
             # pad to be divisible by dp_size
             size_divisor = (
@@ -850,7 +849,7 @@ class RayPPOTrainer:
             metric_dict["val-aux/num_turns/mean"] = sample_turns.mean()
 
         metric_dict["val-aux/valid_length/mean"] = avg_valid_length
-        print(metric_dict)
+
         return metric_dict
 
     def init_workers(self):
@@ -1089,17 +1088,18 @@ class RayPPOTrainer:
         )
         metrics.update(global_balance_stats)
 
-    def compute_length_reward(self, questions_ids, rewards, data):
+    def compute_length_reward(self, index_list, rewards, data):
         """Compute length rewards only for correct (reward ≥ 1) responses."""
         length_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
 
         from concurrent.futures import ThreadPoolExecutor
+        from collections import defaultdict
 
         def process_item(args):
             i, index, reward, data_item = args
             prompt_ids = data_item.batch['prompts']
             prompt_length = prompt_ids.shape[-1]
-            valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
+            valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum().item()
 
             if reward[valid_response_length - 1] < 1:
                 return i, 0, valid_response_length, None
@@ -1108,13 +1108,13 @@ class RayPPOTrainer:
             length_reward = 0.0
 
             if old_minimal_length != 0:
-                length_reward = (old_minimal_length - valid_response_length) / old_minimal_length
+                length_reward = max((old_minimal_length - valid_response_length) / old_minimal_length, 0)
                 return i, length_reward, valid_response_length, None
             else:
                 return i, length_reward, valid_response_length, (index, valid_response_length)
 
         args = [
-            (i, questions_ids[i], rewards[i], data[i])
+            (i, index_list[i], rewards[i], data[i])
             for i in range(len(data))
             if rewards[i].max() >= 1
         ]
@@ -1122,13 +1122,18 @@ class RayPPOTrainer:
         with ThreadPoolExecutor(max_workers=96) as executor:
             results = list(executor.map(process_item, args))
 
+        update_candidates = defaultdict(list)
+
         for i, score, valid_response_length, update in results:
             length_reward_tensor[i, valid_response_length - 1] = self.reward_scale * score
             if update is not None:
                 index, new_len = update
-                self.length_records[index] = new_len
+                update_candidates[index].append(new_len)
 
-        return rewards + length_reward_tensor
+        for index, new_lens in update_candidates.items():
+            self.length_records[index] = min(new_lens)
+
+        return length_reward_tensor
 
     def fit(self):
         """
@@ -1217,6 +1222,7 @@ class RayPPOTrainer:
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
                 gen_batch = gen_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
+                index_list = [item for item in batch_dict["index"] for _ in range(self.config.actor_rollout_ref.rollout.n)]
 
                 is_last_step = self.global_steps >= self.total_training_steps
 
@@ -1335,7 +1341,14 @@ class RayPPOTrainer:
                             reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
 
                         if self.use_length_reward:
-                            reward_tensor = self.compute_length_reward(batch_dict["index"], reward_tensor, batch)
+                            length_reward_tensor = self.compute_length_reward(index_list, reward_tensor, batch)
+                            length_reward_metrics = {
+                                "perf/length_reward_mean": length_reward_tensor.mean().item(),
+                                "perf/length_reward_max": length_reward_tensor.max().item(),
+                                "perf/length_reward_min": length_reward_tensor.min().item(),
+                                                     }
+                            metrics.update(length_reward_metrics)
+                            reward_tensor = reward_tensor + length_reward_tensor
 
                         batch.batch["token_level_scores"] = reward_tensor
 

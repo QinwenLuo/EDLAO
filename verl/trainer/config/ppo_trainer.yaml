@@ -331,10 +331,6 @@ ray_init:
   # Path to save Ray timeline JSON for performance profiling
   timeline_json_file: null
 
-# the coefficient of length reward
-reward_scale: 1.0
-
-
 # configs related to the length rewards
 length_rewards:
 

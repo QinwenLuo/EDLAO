@@ -233,7 +233,7 @@ class TaskRunner:
             collate_fn=collate_fn,
             train_sampler=train_sampler,
             device_name=config.trainer.device,
-            reward_scale=config.reward_scale
+            reward_scale=config.length_rewards.reward_scale
         )
         # Initialize the workers of the trainer.
         trainer.init_workers()

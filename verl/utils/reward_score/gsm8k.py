@@ -18,28 +18,33 @@ import re
 def extract_solution(solution_str, method="strict"):
     assert method in ["strict", "flexible"]
 
+    final_answer = None
+
+    # Step 1: Try to extract \boxed{} content first
+    boxed_answers = re.findall(r"\\boxed\{([^\}]*)\}", solution_str)
+    if boxed_answers:
+        # Get last boxed content
+        boxed_content = boxed_answers[-1]
+        # Try to find number inside (e.g., remove units like 'hours')
+        numbers = re.findall(r"[-+]?\d[\d,]*\.?\d*", boxed_content)
+        if numbers:
+            final_answer = numbers[0].replace(",", "")
+            return final_answer
+
+    # Step 2: Fallback to legacy methods
     if method == "strict":
-        # this also tests the formatting of the model
-        solutions = re.findall("#### (\\-?[0-9\\.\\,]+)", solution_str)
-        if len(solutions) == 0:
-            final_answer = None
-        else:
-            # take the last solution
+        solutions = re.findall(r"#### (\-?[0-9\.\,]+)", solution_str)
+        if len(solutions) != 0:
             final_answer = solutions[-1].replace(",", "").replace("$", "")
     elif method == "flexible":
-        answer = re.findall("(\\-?[0-9\\.\\,]+)", solution_str)
-        final_answer = None
-        if len(answer) == 0:
-            # no reward is there is no answer
-            pass
-        else:
-            invalid_str = ["", "."]
-            # find the last number that is not '.'
-            for final_answer in reversed(answer):
-                if final_answer not in invalid_str:
-                    break
-    return final_answer
+        answer = re.findall(r"(\-?[0-9\.\,]+)", solution_str)
+        for final_answer in reversed(answer):
+            if final_answer not in ["", "."]:
+                final_answer = final_answer.replace(",", "")
+                break
 
+    return final_answer
+    
 
 def compute_score(solution_str, ground_truth, method="strict", format_score=0.0, score=1.0):
     """The scoring function for GSM8k.
