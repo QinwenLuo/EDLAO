@@ -1133,7 +1133,7 @@ class RayPPOTrainer:
         for index, new_lens in update_candidates.items():
             self.length_records[index] = min(new_lens)
 
-        return length_reward_tensor
+        return length_reward_tensor.clamp(min=-1)
 
     def fit(self):
         """
@@ -1339,6 +1339,13 @@ class RayPPOTrainer:
                         reward_extra_infos_dict: dict[str, list]
                         if self.config.reward_model.launch_reward_fn_async:
                             reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
+
+                        response_correct = reward_tensor.eq(1).any(dim=2).float()
+                        correct_counts = response_correct.sum(dim=1)
+                        difficulty_ratio = 1 - correct_counts / reward_tensor.size(1)
+                        difficulties = (difficulty_ratio >= 0.7).long().unsqueeze(1)
+
+                        batch.batch["difficulties"] = difficulties.view(-1, 1, 1)
 
                         if self.use_length_reward:
                             length_reward_tensor = self.compute_length_reward(index_list, reward_tensor, batch)
