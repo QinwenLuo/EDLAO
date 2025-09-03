@@ -394,6 +394,7 @@ class DataParallelPPOActor(BasePPOActor):
             "position_ids",
             "old_log_probs",
             "advantages",
+            "difficulties",
         ]
         if self.config.use_kl_loss:
             select_keys.append("ref_log_prob")
@@ -507,7 +508,7 @@ class DataParallelPPOActor(BasePPOActor):
                     )
 
                     if self.config.use_entropy_advantage:
-                        advantages += torch.min(self.config.entropy_advantage_alpha * entropy.detach(), advantages.abs() / self.config.entropy_advantage_kappa) * scale
+                        advantages += torch.min(self.config.entropy_advantage_alpha * entropy.detach(), advantages.abs() / self.config.entropy_advantage_kappa) * data["difficulties"] * scale
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
