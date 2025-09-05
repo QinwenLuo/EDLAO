@@ -1340,13 +1340,16 @@ class RayPPOTrainer:
                         if self.config.reward_model.launch_reward_fn_async:
                             reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
 
-                        response_correct = reward_tensor.eq(1).any(dim=2).float()
-                        correct_counts = response_correct.sum(dim=1)
-                        difficulty_ratio = 1 - correct_counts / reward_tensor.size(1)
-                        difficulties = (difficulty_ratio >= 0.7).long().unsqueeze(1)
+                        acc_per_prompt = (
+                            reward_tensor.sum(dim=-1)   # (B*N,)
+                            .view(-1, self.config.actor_rollout_ref.rollout.n)  # (B, N)
+                            .sum(dim=-1) / self.config.actor_rollout_ref.rollout.n  # (B,)
+                        )
 
-                        batch.batch["difficulties"] = difficulties.view(-1, 1, 1)
+                        difficulties = (acc_per_prompt <= 0.1).long().unsqueeze(1)
 
+                        batch.batch["difficulties"] = difficulties.repeat_interleave(self.config.actor_rollout_ref.rollout.n, dim=0)
+                        
                         if self.use_length_reward:
                             length_reward_tensor = self.compute_length_reward(index_list, reward_tensor, batch)
                             length_reward_metrics = {
