@@ -24,7 +24,6 @@ import uuid
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass, field
-from distutils.command.config import config
 from enum import Enum
 from pprint import pprint
 from typing import Optional
@@ -33,7 +32,6 @@ import numpy as np
 import ray
 import torch
 from omegaconf import OmegaConf, open_dict
-
 from torch.utils.data import Dataset, Sampler
 from torchdata.stateful_dataloader import StatefulDataLoader
 from tqdm import tqdm
@@ -774,13 +772,13 @@ class RayPPOTrainer:
             eos_token_id = self.tokenizer.eos_token_id
             pad_token_id = self.tokenizer.pad_token_id
 
-            def get_effective_length(ids):
+            def get_effective_length(ids,eos_token_id,pad_token_id):
                 for i, tok in enumerate(ids):
                     if tok == eos_token_id or tok == pad_token_id:
                         return i + 1
                 return len(ids)
 
-            valid_lengths = [get_effective_length(ids) for ids in output_ids]
+            valid_lengths = [get_effective_length(ids,eos_token_id,pad_token_id) for ids in output_ids]
             avg_valid_length = sum(valid_lengths) / len(valid_lengths)
   
             sample_outputs.extend(output_texts)
@@ -1092,8 +1090,8 @@ class RayPPOTrainer:
         """Compute length rewards only for correct (reward ≥ 1) responses."""
         length_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
 
-        from concurrent.futures import ThreadPoolExecutor
         from collections import defaultdict
+        from concurrent.futures import ThreadPoolExecutor
 
         def process_item(args):
             i, index, reward, data_item = args

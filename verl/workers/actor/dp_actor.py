@@ -491,7 +491,7 @@ class DataParallelPPOActor(BasePPOActor):
 
                     assert not (
                         entropy_coeff != 0 and self.config.use_entropy_advantage
-                        ), f"Cannot set entropy_coeff>0 and use_entropy_advantage=True at the same time. They are mutually exclusive."
+                        ), "Cannot set entropy_coeff>0 and use_entropy_advantage=True at the same time. They are mutually exclusive."
                     
                     if entropy_coeff != 0 or self.config.use_entropy_advantage:
                         calculate_entropy = True
@@ -508,7 +508,7 @@ class DataParallelPPOActor(BasePPOActor):
                     )
 
                     if self.config.use_entropy_advantage:
-                        advantages += torch.min(self.config.entropy_advantage_alpha * entropy.detach(), advantages.abs() / self.config.entropy_advantage_kappa) * data["difficulties"] * scale
+                        advantages += torch.min(self.config.entropy_advantage_alpha * entropy.detach(), advantages.abs() / self.config.entropy_advantage_kappa) * scale * data["difficulties"]
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
