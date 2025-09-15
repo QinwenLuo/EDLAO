@@ -1,0 +1,92 @@
+hydra:
+  searchpath:
+    - file://./config
+    - pkg://verl.trainer.config
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+data:
+  train_files: /data1/datasets/math/train.parquet
+  val_files: /data1/datasets/math/train.parquet
+  train_batch_size: 1536
+  val_batch_size: 512
+  max_prompt_length: 2048
+  max_response_length: 18432
+
+# ============================
+# Actor, Rollout, Reference 模型配置
+# ============================
+actor_rollout_ref:
+  model:
+    path: /data1/hf-models/Qwen3/Qwen3-0.6B
+    lora_rank: 32
+    lora_alpha: 32
+    target_modules: all-linear
+    use_remove_padding: True
+    enable_gradient_checkpointing: True
+    use_shm: True
+
+  actor:
+    optim:
+      lr: 3e-6
+    ppo_mini_batch_size: 64
+    use_dynamic_bsz: True
+    ulysses_sequence_parallel_size: 1
+    ppo_max_token_len_per_gpu: 20480
+    use_kl_loss: True
+    kl_loss_coef: 0.001
+    kl_loss_type: low_var_kl
+    entropy_coeff: 0
+    entropy_coeff_annealing: cosine
+    use_entropy_advantage: True
+    entropy_advantage_alpha: 0.4
+    entropy_advantage_kappa: 2.0
+    clip_ratio_high: 0.28
+    fsdp_config:
+      fsdp_size: 4
+      param_offload: True
+      optimizer_offload: True
+      model_dtype: bf16
+    checkpoint:
+      save_contents: ["model", "optimizer", "extra"]
+
+  ref:
+    fsdp_config:
+      param_offload: True
+    log_prob_max_token_len_per_gpu: 20480
+
+  rollout:
+    name: vllm
+    temperature: 0.6
+    log_prob_max_token_len_per_gpu: 4096
+    tensor_model_parallel_size: 4
+    gpu_memory_utilization: 0.6
+    n: 4
+    max_num_seqs: 64
+    max_num_batched_tokens: 20480
+    load_format: safetensors
+    layered_summon: True
+    dtype: bfloat16
+
+algorithm:
+  adv_estimator: grpo
+  kl_ctrl:
+    kl_coef: 0.001
+
+trainer:
+  project_name: entropy-token-less
+  experiment_name: deepmath
+  logger: ["console", "swanlab"]
+  val_before_train: False
+  critic_warmup: 0
+  nnodes: 1
+  n_gpus_per_node: 2
+  save_freq: 3
+  test_freq: -1
+  total_epochs: 10
+
+length_rewards:
+  use_length_reward: True
+  reward_scale: 0.5
