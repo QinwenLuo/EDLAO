@@ -13,7 +13,10 @@ data:
   train_batch_size: 1536
   val_batch_size: 512
   max_prompt_length: 2048
-  max_response_length: 18432
+  max_response_length: 20480
+  overlong_buffer_length: 4096
+  overlong_penalty_factor: 1.0
+  overlong_enable: True
 
 # ============================
 # Actor, Rollout, Reference 模型配置
