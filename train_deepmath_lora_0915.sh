@@ -47,7 +47,7 @@ python main_edlao.py \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.actor.entropy_coeff=0 \
     actor_rollout_ref.actor.entropy_coeff_annealing=cosine \
-    actor_rollout_ref.actor.use_entropy_advantage=False \
+    actor_rollout_ref.actor.use_entropy_advantage=True \
     actor_rollout_ref.actor.clip_ratio_high=0.28 \
     actor_rollout_ref.actor.entropy_advantage_alpha=0.4 \
     actor_rollout_ref.actor.entropy_advantage_kappa=2.0 \
@@ -65,7 +65,7 @@ python main_edlao.py \
     actor_rollout_ref.rollout.tensor_model_parallel_size=4 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
-    actor_rollout_ref.rollout.n=4 \
+    actor_rollout_ref.rollout.n=16 \
     actor_rollout_ref.rollout.max_num_seqs=64 \
     actor_rollout_ref.rollout.max_num_batched_tokens=$MAX_LEN \
     actor_rollout_ref.rollout.load_format=safetensors \

@@ -210,7 +210,7 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
                         )
 
                     if entropy_coeff != 0:
-                        entropy_coeff = scale * entropy_coeff
+                        entropy_coeff = scale * entropy_coeff * data["difficulties"]
                         entropy_loss = agg_loss(
                             loss_mat=entropy,
                             loss_mask=response_mask,
