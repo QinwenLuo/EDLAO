@@ -81,7 +81,7 @@ python main_edlao.py \
     actor_rollout_ref.rollout.tensor_model_parallel_size=4 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
-    actor_rollout_ref.rollout.n=12 \
+    actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.max_num_seqs=64 \
     actor_rollout_ref.rollout.max_num_batched_tokens=$MAX_LEN \
     actor_rollout_ref.rollout.load_format=safetensors \
