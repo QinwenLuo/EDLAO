@@ -19,6 +19,7 @@ Single Process Actor
 
 import logging
 import os
+import math
 
 import torch
 from torch import nn
@@ -55,6 +56,14 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
         actor_optimizer: torch.optim.Optimizer = None,
     ):
         super().__init__(config, actor_module, actor_optimizer)
+
+        if self.config.entropy_coeff != 0 or self.config.use_entropy_advantage:
+            self.calculate_entropy = True
+            assert not (
+                    self.config.entropy_coeff != 0 and self.config.use_entropy_advantage
+                ), (
+                    "Cannot set entropy_coeff>0 and use_entropy_advantage=True at the same time. They are mutually exclusive."
+                )
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
     def update_policy(self, data: DataProto):
@@ -139,24 +148,14 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
                     loss_agg_mode = self.config.loss_agg_mode
 
                     # all return: (bsz, response_length)
-                    calculate_entropy = False
 
-                    assert not (
-                        entropy_coeff != 0 and self.config.use_entropy_advantage
-                    ), (
-                        "Cannot set entropy_coeff>0 and use_entropy_advantage=True at the same time. They are mutually exclusive."
-                    )
                     scale = 0.0
-                    if entropy_coeff != 0 or self.config.use_entropy_advantage:
-                        calculate_entropy = True
+                    if self.calculate_entropy:
                         if self.config.entropy_coeff_annealing == "linear":
                             scale = 1 - global_steps / total_training_steps
                         elif self.config.entropy_coeff_annealing == "cosine":
-                            import math
-
                             scale = 0.5 * (
-                                1
-                                + math.cos(
+                                1 + math.cos(
                                     math.pi * global_steps / total_training_steps
                                 )
                             )
@@ -166,18 +165,21 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
                     entropy, log_prob = self._forward_micro_batch(
                         model_inputs,
                         temperature=temperature,
-                        calculate_entropy=calculate_entropy,
+                        calculate_entropy=self.calculate_entropy,
                     )
 
                     if self.config.use_entropy_advantage:
-                        advantages += (
-                            torch.min(
+                        entropy_adv = torch.min(
                                 self.config.entropy_advantage_alpha * entropy.detach(),
                                 advantages.abs() / self.config.entropy_advantage_kappa,
                             )
+                        print('advantage info', advantages.shape, entropy_adv.shape, model_inputs["difficulties"].shape)
+                        advantages += (
+                            entropy_adv
                             * scale
-                            * model_inputs["difficulties"]
+                            * model_inputs["difficulties"].detach()
                         )
+
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
