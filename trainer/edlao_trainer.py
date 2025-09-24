@@ -427,7 +427,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                             / self.config.actor_rollout_ref.rollout.n  # (B,)
                         )
 
-                        difficulties = (acc_per_prompt <= 0.1).long().unsqueeze(1)
+                        difficulties = (acc_per_prompt <= 0.1).to(device=self.device_name, dtype=reward_tensor.dtype).unsqueeze(1)
 
                         batch.batch["difficulties"] = difficulties.repeat_interleave(
                             self.config.actor_rollout_ref.rollout.n, dim=0

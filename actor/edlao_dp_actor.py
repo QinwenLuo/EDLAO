@@ -173,18 +173,12 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
                                 self.config.entropy_advantage_alpha * entropy.detach(),
                                 advantages.abs() / self.config.entropy_advantage_kappa,
                             )
-                        print("advantages info:", advantages.shape, advantages.dtype, advantages.device)
-                        print("entropy info:", entropy.shape, entropy.dtype, entropy.device)
-                        print("entropy_adv info:", entropy_adv.shape, entropy_adv.dtype, entropy_adv.device)
-                        print("difficulties info:", model_inputs["difficulties"].shape, model_inputs["difficulties"].dtype)
-                        print("scale info:", type(scale), getattr(scale, "shape", None))
-
+                        
                         advantages += (
                             entropy_adv
                             * scale
-                            * model_inputs["difficulties"].detach()
+                            # * model_inputs["difficulties"].detach()
                         )
-                        print("finallyadvantages info:", advantages.shape, advantages.dtype, advantages.device)
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
 
