@@ -131,6 +131,7 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
                     response_mask = model_inputs["response_mask"]
                     old_log_prob = model_inputs["old_log_probs"]
                     advantages = model_inputs["advantages"]
+                    difficulty_mask = model_inputs["difficulties"].detach()
 
                     clip_ratio = self.config.clip_ratio
                     clip_ratio_low = (
@@ -177,7 +178,7 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
                         advantages += (
                             entropy_adv
                             * scale
-                            # * model_inputs["difficulties"].detach()
+                            # * difficulty_mask
                         )
 
                     loss_mode = self.config.policy_loss.get("loss_mode", "vanilla")
@@ -211,10 +212,10 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
                         )
 
                     if entropy_coeff != 0:
-                        entropy_coeff = scale * entropy_coeff * data["difficulties"]
+                        entropy_coeff = scale * entropy_coeff
                         entropy_loss = agg_loss(
                             loss_mat=entropy,
-                            loss_mask=response_mask,
+                            loss_mask=response_mask * difficulty_mask,
                             loss_agg_mode=loss_agg_mode,
                         )
 
