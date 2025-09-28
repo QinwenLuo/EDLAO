@@ -139,7 +139,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                     overlong_reward = - (exceed_length / cfg.overlong_buffer_length) * cfg.overlong_penalty_factor
 
             if old_minimal_length != 0:
-                length_reward = ((old_minimal_length - valid_response_length) / float(old_minimal_length)).clamp(min=-1)
+                length_reward = ((old_minimal_length - valid_response_length) / float(old_minimal_length)).clip(min=-1)
             else:
                 length_reward = 0.0
 
