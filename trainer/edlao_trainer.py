@@ -112,7 +112,9 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
 
     def compute_length_reward(self, index_list, rewards, data): 
         """Compute length rewards only for correct (reward ≥ 1) responses."""
-        length_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
+        all_length_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
+        length_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32).sum(dim=-1)
+        overlong_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32).sum(dim=-1)
 
         from collections import defaultdict
         from concurrent.futures import ThreadPoolExecutor
@@ -144,10 +146,10 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                 length_reward = 0.0
 
             if cfg.overlong_enable:
-                length_reward += overlong_reward
+                all_length_reward = length_reward + overlong_reward
 
             extra = None if old_minimal_length != 0 else (index, valid_response_length)
-            return i, length_reward, valid_response_length, extra
+            return i, all_length_reward, valid_response_length, extra, length_reward, overlong_reward
 
         args = [
             (i, index_list[i], rewards[i], data[i])
@@ -160,8 +162,10 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
 
         update_candidates = defaultdict(list)
 
-        for i, score, valid_response_length, update in results:
-            length_reward_tensor[i, valid_response_length - 1] = self.reward_scale * score
+        for i, score, valid_response_length, update, length_reward, overlong_reward in results:
+            all_length_reward_tensor[i, valid_response_length - 1] = self.reward_scale * score
+            length_reward_tensor[i] = self.reward_scale * length_reward
+            overlong_reward_tensor[i] = self.reward_scale * overlong_reward
             if update is not None:
                 index, new_len = update
                 update_candidates[index].append(new_len)
@@ -169,7 +173,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
         for index, new_lens in update_candidates.items():
             self.length_records[index] = min(new_lens)
 
-        return length_reward_tensor
+        return all_length_reward_tensor, length_reward_tensor, overlong_reward_tensor
 
     def fit(self):
         """
@@ -427,20 +431,29 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                             / self.config.actor_rollout_ref.rollout.n  # (B,)
                         )
 
-                        difficulties = (acc_per_prompt <= 0.1).to(dtype=reward_tensor.dtype).unsqueeze(1)
+                        difficulties = (acc_per_prompt <= 0.2).to(dtype=reward_tensor.dtype).unsqueeze(1)
 
                         batch.batch["difficulties"] = difficulties.repeat_interleave(
                             self.config.actor_rollout_ref.rollout.n, dim=0
                         )
 
+                        correct_reward_mean = reward_tensor.mean().item()
+                        correct_reward_max = reward_tensor.max().item()
+                        correct_reward_min = reward_tensor.min().item()
                         if self.use_length_reward:
-                            length_reward_tensor = self.compute_length_reward(
+                            length_reward_tensor, length_reward_log, overlong_reward_log = self.compute_length_reward(
                                 index_list, reward_tensor, batch
                             )
                             length_reward_metrics = {
                                 "perf/length_reward_mean": length_reward_tensor.mean().item(),
                                 "perf/length_reward_max": length_reward_tensor.max().item(),
                                 "perf/length_reward_min": length_reward_tensor.min().item(),
+                                "perf/single_length_reward_mean": length_reward_log.mean().item(),
+                                "perf/single_length_reward_max": length_reward_log.max().item(),
+                                "perf/single_length_reward_min": length_reward_log.min().item(),
+                                "perf/overlong_reward_mean": overlong_reward_log.mean().item(),
+                                "perf/overlong_reward_max": overlong_reward_log.max().item(),
+                                "perf/overlong_reward_min": overlong_reward_log.min().item(),
                             }
                             metrics.update(length_reward_metrics)
                             reward_tensor = reward_tensor + length_reward_tensor
@@ -588,6 +601,9 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                     {
                         "training/global_step": self.global_steps,
                         "training/epoch": epoch,
+                        "critic/correct_reward_mean": correct_reward_mean,
+                        "critic/correct_reward_max": correct_reward_max,
+                        "critic/correct_reward_min": correct_reward_min,
                     }
                 )
                 # collect metrics
