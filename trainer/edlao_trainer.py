@@ -424,12 +424,11 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                                 future_reward
                             )
 
-                        acc_per_prompt = (
-                            reward_tensor.sum(dim=-1)  # (B*N,)
-                            .view(-1, self.config.actor_rollout_ref.rollout.n)  # (B, N)
-                            .sum(dim=-1)
-                            / self.config.actor_rollout_ref.rollout.n  # (B,)
-                        )
+                        acc_single = (reward_tensor.sum(dim=-1) == 1).float()
+
+                        acc_single = acc_single.view(-1, self.config.actor_rollout_ref.rollout.n)
+
+                        acc_per_prompt = acc_single.mean(dim=-1)
 
                         difficulties = (acc_per_prompt <= 0.2).to(dtype=reward_tensor.dtype).unsqueeze(1)
 
