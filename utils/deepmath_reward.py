@@ -617,12 +617,12 @@ def format_intervals(prediction):
 def compute_score(solution_str, ground_truth) -> float:
     extracted_answer = extract_answer(solution_str, extract_from_boxed=True)
     if extracted_answer is None:
-        return -1.0
+        return 0
     else:
         if math_equal(extracted_answer, ground_truth, check_antlr_version=False):
             return 1.0
         else:
-            return -0.5
+            return 0.1
 
 
 def deepmath_reward_fn(

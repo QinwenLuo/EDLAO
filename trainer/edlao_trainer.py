@@ -436,9 +436,6 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                             self.config.actor_rollout_ref.rollout.n, dim=0
                         )
 
-                        correct_reward_mean = reward_tensor.mean().item()
-                        correct_reward_max = reward_tensor.max().item()
-                        correct_reward_min = reward_tensor.min().item()
                         if self.use_length_reward:
                             length_reward_tensor, length_reward_log, overlong_reward_log = self.compute_length_reward(
                                 index_list, reward_tensor, batch
@@ -600,9 +597,9 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                     {
                         "training/global_step": self.global_steps,
                         "training/epoch": epoch,
-                        "critic/correct_reward_mean": correct_reward_mean,
-                        "critic/correct_reward_max": correct_reward_max,
-                        "critic/correct_reward_min": correct_reward_min,
+                        "critic/correct_reward_mean": acc_per_prompt.mean().item(),
+                        "critic/correct_reward_max": acc_per_prompt.max().item(),
+                        "critic/correct_reward_min": acc_per_prompt.min().item(),
                     }
                 )
                 # collect metrics

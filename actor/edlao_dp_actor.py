@@ -59,11 +59,6 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
 
         if self.config.entropy_coeff != 0 or self.config.use_entropy_advantage:
             self.calculate_entropy = True
-            assert not (
-                    self.config.entropy_coeff != 0 and self.config.use_entropy_advantage
-                ), (
-                    "Cannot set entropy_coeff>0 and use_entropy_advantage=True at the same time. They are mutually exclusive."
-                )
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
     def update_policy(self, data: DataProto):
@@ -210,10 +205,9 @@ class EDLAODataParallelPPOActor(DataParallelPPOActor):
                         )
 
                     if entropy_coeff != 0:
-                        entropy_coeff = scale * entropy_coeff
                         entropy_loss = agg_loss(
                             loss_mat=entropy,
-                            loss_mask=response_mask * difficulty_mask,
+                            loss_mask=response_mask,
                             loss_agg_mode=loss_agg_mode,
                         )
 
