@@ -145,6 +145,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
             else:
                 length_reward = 0.0
 
+            all_length_reward = length_reward
             if cfg.overlong_enable:
                 all_length_reward = length_reward + overlong_reward
 
