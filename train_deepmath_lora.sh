@@ -45,7 +45,7 @@ python main_edlao.py \
     data.max_response_length=$MAX_RESPONSE_LENGTH \
     data.overlong_buffer_length=$OVERLONG_BUFFER_LENGTH \
     data.overlong_penalty_factor=$OVERLONG_PENALTY_FACTOR \
-    data.overlong_enable=True \
+    data.overlong_enable=False \
     actor_rollout_ref.model.path=$MODEL_PATH \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.use_shm=True \
@@ -64,7 +64,7 @@ python main_edlao.py \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.actor.entropy_coeff=0.001 \
-    actor_rollout_ref.actor.entropy_coeff_annealing=cosine \
+    actor_rollout_ref.actor.entropy_coeff_annealing=constant \
     actor_rollout_ref.actor.use_entropy_advantage=True \
     actor_rollout_ref.actor.clip_ratio_high=0.28 \
     actor_rollout_ref.actor.entropy_advantage_alpha=0.4 \
