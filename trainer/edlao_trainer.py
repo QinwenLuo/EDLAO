@@ -172,7 +172,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                 update_candidates[index].append(new_len)
 
         for index, new_lens in update_candidates.items():
-            self.length_records[index] = min(new_lens)
+            self.length_records[index] = sum(new_lens) / len(new_lens)
 
         return all_length_reward_tensor, length_reward_tensor, overlong_reward_tensor
 
