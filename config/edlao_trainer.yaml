@@ -92,4 +92,5 @@ trainer:
 
 length_rewards:
   use_length_reward: True
+  ema_target_value: True
   reward_scale: 0.5

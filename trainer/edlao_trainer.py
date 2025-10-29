@@ -23,7 +23,7 @@ import uuid
 from collections import defaultdict
 from copy import deepcopy
 from pprint import pprint
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import ray
@@ -60,6 +60,33 @@ from verl.utils.debug import marked_timer
 from verl.utils.metric import (
     reduce_metrics,
 )
+
+
+def _to_tensor(x) -> torch.Tensor:
+    if isinstance(x, torch.Tensor):
+        return x
+    x = np.asarray(x)
+    return torch.from_numpy(x)
+
+@torch.no_grad()
+def trimmed_mean_length(
+    lengths, 
+    lower_q: float = 0.1, 
+    upper_q: float = 0.8,
+    min_keep: int = 3
+) -> torch.Tensor:
+    l = _to_tensor(lengths).float().flatten()
+    if l.numel() == 0:
+        return torch.tensor(0.0, dtype=torch.float32)
+    if l.numel() < min_keep:
+        return l.mean()
+
+    lo = torch.quantile(l, lower_q)
+    hi = torch.quantile(l, upper_q)
+    mask = (l >= lo) & (l <= hi)
+    if mask.sum() < min_keep:
+        return l.mean()
+    return l[mask].mean()
 
 
 class EDLAORayPPOTrainer(RayPPOTrainer):
@@ -107,10 +134,11 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
         self.reward_scale = config.length_rewards.reward_scale
 
         self.length_records = np.zeros((len(train_dataset) + 100,))
+        self.acc_records = np.zeros((len(train_dataset) + 100,)) - 1
 
         self.use_length_reward = config.length_rewards.use_length_reward
 
-    def compute_length_reward(self, index_list, rewards, data): 
+    def compute_length_reward(self, index_list, rewards, data, current_acc): 
         """Compute length rewards only for correct (reward ≥ 1) responses."""
         all_length_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
         length_reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32).sum(dim=-1)
@@ -141,7 +169,14 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                     overlong_reward = - (exceed_length / cfg.overlong_buffer_length) * cfg.overlong_penalty_factor
 
             if old_minimal_length != 0:
-                length_reward = ((old_minimal_length - valid_response_length) / float(old_minimal_length)).clip(min=0)
+                low = 0.8 * old_minimal_length
+                high = 1.2 * old_minimal_length
+                if valid_response_length < low:
+                    length_reward = (valid_response_length - low)/low
+                elif valid_response_length > high:
+                    length_reward = (high - valid_response_length)/high
+                else:
+                    length_reward = 1 - abs(valid_response_length - old_minimal_length)/(0.2 * old_minimal_length)
             else:
                 length_reward = 0.0
 
@@ -151,12 +186,13 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
 
             extra = None if old_minimal_length != 0 else (index, valid_response_length)
             return i, all_length_reward, valid_response_length, extra, length_reward, overlong_reward
-
-        args = [
-            (i, index_list[i], rewards[i], data[i])
-            for i in range(len(data))
-            if rewards[i].max() >= 1
-        ]
+        
+        args = []
+        length_reward_nums = 0
+        for i, (datum, idx) in enumerate(zip(data, index_list)):
+            if current_acc[i] > self.acc_records[idx] * 0.95 and rewards[i].max() >= 1:
+                args.append((i, idx, rewards[i], datum))
+                length_reward_nums += 1
 
         with ThreadPoolExecutor(max_workers=96) as executor:
             results = list(executor.map(process_item, args))
@@ -172,9 +208,13 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                 update_candidates[index].append(new_len)
 
         for index, new_lens in update_candidates.items():
-            self.length_records[index] = sum(new_lens) / len(new_lens)
+            new_mean_len = trimmed_mean_length(new_lens)
+            if self.config.length_rewards.ema_target_value:
+                self.length_records[index] = 0.8 * self.length_records[index] + 0.2 * new_mean_len
+            else:
+                new_mean_len = sum(new_mean_len) / len(new_mean_len)
 
-        return all_length_reward_tensor, length_reward_tensor, overlong_reward_tensor
+        return all_length_reward_tensor, length_reward_tensor, overlong_reward_tensor, length_reward_nums
 
     def fit(self):
         """
@@ -263,11 +303,6 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                     repeat_times=self.config.actor_rollout_ref.rollout.n,
                     interleave=True,
                 )
-                index_list = [
-                    item
-                    for item in batch_dict["index"]
-                    for _ in range(self.config.actor_rollout_ref.rollout.n)
-                ]
 
                 is_last_step = self.global_steps >= self.total_training_steps
 
@@ -433,13 +468,19 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
 
                         difficulties = (acc_per_prompt <= 0.2).to(dtype=reward_tensor.dtype).unsqueeze(1)
 
+                        index_list = [
+                            item
+                            for item in batch_dict["index"]
+                            for _ in range(self.config.actor_rollout_ref.rollout.n)
+                        ]
+
                         batch.batch["difficulties"] = difficulties.repeat_interleave(
                             self.config.actor_rollout_ref.rollout.n, dim=0
                         )
 
                         if self.use_length_reward:
-                            length_reward_tensor, length_reward_log, overlong_reward_log = self.compute_length_reward(
-                                index_list, reward_tensor, batch
+                            length_reward_tensor, length_reward_log, overlong_reward_log, length_reward_nums = self.compute_length_reward(
+                                index_list, reward_tensor, batch, acc_per_prompt
                             )
                             length_reward_metrics = {
                                 "perf/length_reward_mean": length_reward_tensor.mean().item(),
@@ -451,11 +492,22 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                                 "perf/overlong_reward_mean": overlong_reward_log.mean().item(),
                                 "perf/overlong_reward_max": overlong_reward_log.max().item(),
                                 "perf/overlong_reward_min": overlong_reward_log.min().item(),
+                                "perf/length_reward_nums": length_reward_nums,
                             }
                             metrics.update(length_reward_metrics)
                             reward_tensor = reward_tensor + length_reward_tensor
 
                         batch.batch["token_level_scores"] = reward_tensor
+
+
+                        for i, idx in enumerate(batch_dict["index"]):
+                            new = acc_per_prompt[i]
+                            if self.acc_records[idx] < 0:
+                                self.acc_records[idx] = new
+                            else:
+                                old = self.acc_records[idx]
+                                alpha = 0.2 if new > old else 0.05
+                                self.acc_records[idx] = alpha * new + (1 - alpha) * old
 
                         if reward_extra_infos_dict:
                             batch.non_tensor_batch.update(
