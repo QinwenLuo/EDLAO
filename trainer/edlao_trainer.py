@@ -477,6 +477,9 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                         batch.batch["difficulties"] = difficulties.repeat_interleave(
                             self.config.actor_rollout_ref.rollout.n, dim=0
                         )
+                        current_acc = current_acc.repeat_interleave(
+                            self.config.actor_rollout_ref.rollout.n, dim=0
+                        )
 
                         if self.use_length_reward:
                             length_reward_tensor, length_reward_log, overlong_reward_log, length_reward_nums = self.compute_length_reward(
