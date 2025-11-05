@@ -72,7 +72,7 @@ def _to_tensor(x) -> torch.Tensor:
 def trimmed_mean_length(
     lengths, 
     lower_q: float = 0.1, 
-    upper_q: float = 0.8,
+    upper_q: float = 0.9,
     min_keep: int = 3
 ) -> torch.Tensor:
     l = _to_tensor(lengths).float().flatten()
@@ -190,7 +190,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
         args = []
         length_reward_nums = 0
         for i, (datum, idx) in enumerate(zip(data, index_list)):
-            if current_acc[i] > self.acc_records[idx] * 0.95 and rewards[i].max() >= 1:
+            if current_acc[i] > self.acc_records[idx] and rewards[i].max() >= 1:
                 args.append((i, idx, rewards[i], datum))
                 length_reward_nums += 1
 
@@ -466,7 +466,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
 
                         acc_per_prompt = acc_single.mean(dim=-1)
 
-                        difficulties = (acc_per_prompt <= 0.2).to(dtype=reward_tensor.dtype).unsqueeze(1)
+                        difficulties = (acc_per_prompt <= 0.3).to(dtype=reward_tensor.dtype).unsqueeze(1)
 
                         index_list = [
                             item

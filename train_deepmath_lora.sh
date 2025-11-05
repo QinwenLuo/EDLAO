@@ -63,7 +63,7 @@ python main_edlao.py \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
-    actor_rollout_ref.actor.entropy_coeff=0.001 \
+    actor_rollout_ref.actor.entropy_coeff=0.005 \
     actor_rollout_ref.actor.entropy_coeff_annealing=constant \
     actor_rollout_ref.actor.use_entropy_advantage=True \
     actor_rollout_ref.actor.clip_ratio_high=0.28 \
