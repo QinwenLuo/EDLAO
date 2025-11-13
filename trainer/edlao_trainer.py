@@ -190,7 +190,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
         args = []
         length_reward_nums = 0
         for i, (datum, idx) in enumerate(zip(data, index_list)):
-            if current_acc[i] > self.acc_records[idx] and rewards[i].max() >= 1:
+            if self.acc_records[idx] > 0 and current_acc[i] > self.acc_records[idx] and rewards[i].max() >= 1:
                 args.append((i, idx, rewards[i], datum))
                 length_reward_nums += 1
 
@@ -208,9 +208,9 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                 update_candidates[index].append(new_len)
 
         for index, new_lens in update_candidates.items():
-            new_mean_len = trimmed_mean_length(new_lens)
+            new_mean_len = np.mean(new_lens)
             if self.config.length_rewards.ema_target_value:
-                self.length_records[index] = 0.8 * self.length_records[index] + 0.2 * new_mean_len
+                self.length_records[index] = 0.9 * self.length_records[index] + 0.1 * new_mean_len
             else:
                 new_mean_len = sum(new_mean_len) / len(new_mean_len)
 
@@ -466,7 +466,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
 
                         acc_per_prompt = acc_single.mean(dim=-1)
 
-                        difficulties = (acc_per_prompt <= 0.3).to(dtype=reward_tensor.dtype).unsqueeze(1)
+                        difficulties = (acc_per_prompt <= self.acc_records.mean()).to(dtype=reward_tensor.dtype).unsqueeze(1)
 
                         index_list = [
                             item
@@ -501,7 +501,6 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                             reward_tensor = reward_tensor + length_reward_tensor
 
                         batch.batch["token_level_scores"] = reward_tensor
-
 
                         for i, idx in enumerate(batch_dict["index"]):
                             new = acc_per_prompt[i]
