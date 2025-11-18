@@ -174,7 +174,8 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                 if valid_response_length < low:
                     length_reward = (valid_response_length - low)/low
                 elif valid_response_length > high:
-                    length_reward = (high - valid_response_length)/high
+                    # length_reward = (high - valid_response_length)/high
+                    length_reward = 0
                 else:
                     length_reward = 1 - abs(valid_response_length - old_minimal_length)/(0.2 * old_minimal_length)
             else:
@@ -190,7 +191,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
         args = []
         length_reward_nums = 0
         for i, (datum, idx) in enumerate(zip(data, index_list)):
-            if self.acc_records[idx] > 0 and current_acc[i] > self.acc_records[idx] and rewards[i].max() >= 1:
+            if current_acc[i] > self.acc_records[idx] and rewards[i].max() >= 1:
                 args.append((i, idx, rewards[i], datum))
                 length_reward_nums += 1
 
