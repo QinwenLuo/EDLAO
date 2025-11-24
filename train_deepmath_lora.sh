@@ -9,7 +9,7 @@ MODEL_PATH="/nfs/ofs-llm-ssd/user/shengrenren_i/models/DeepSeek-R1-Distill-Qwen-
 # ============================
 # 数据路径
 # ============================
-TRAIN_FILE="/nfs/ofs-llm-ssd/user/shengrenren_i/data/deepmath/train.parquet"
+TRAIN_FILE="/nfs/ofs-llm-ssd/user/shengrenren_i/data/deepmath/deepmath_train.parquet"
 TEST_FILE="/nfs/ofs-llm-ssd/user/shengrenren_i/data/deepmath/test.parquet"
 
 LOG_DIR="./logs"
