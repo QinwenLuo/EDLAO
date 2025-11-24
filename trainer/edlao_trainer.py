@@ -208,7 +208,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
                 update_candidates[index].append(new_len)
 
         for index, new_lens in update_candidates.items():
-            new_mean_len = np.mean(new_lens)
+            new_mean_len = trimmed_mean_length(new_lens)
             if self.config.length_rewards.ema_target_value:
                 self.length_records[index] = 0.9 * self.length_records[index] + 0.1 * new_mean_len
             else:
