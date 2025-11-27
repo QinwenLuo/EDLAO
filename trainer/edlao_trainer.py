@@ -190,7 +190,7 @@ class EDLAORayPPOTrainer(RayPPOTrainer):
         args = []
         length_reward_nums = 0
         for i, (datum, idx) in enumerate(zip(data, index_list)):
-            if self.acc_records[idx] > 0 and current_acc[i] > self.acc_records[idx] and rewards[i].max() >= 1:
+            if current_acc[i] > self.acc_records[idx] and rewards[i].max() >= 1:
                 args.append((i, idx, rewards[i], datum))
                 length_reward_nums += 1
 

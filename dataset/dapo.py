@@ -120,12 +120,12 @@ train_dataset_math = train_dataset_math.map(
 )
 
 train_dataset.to_parquet(local_dir + "train.parquet")
-train_dataset_math.to_parquet(local_dir + "train_math.parquet")
+# train_dataset_math.to_parquet(local_dir + "train_math.parquet")
 
 
-combined_dataset = concatenate_datasets([train_dataset, train_dataset_math])
-combined_dataset = combined_dataset.shuffle(seed=42).remove_columns(
-    ["source_prompt", "ability", "type", "level"]
-)
+# combined_dataset = concatenate_datasets([train_dataset, train_dataset_math])
+# combined_dataset = combined_dataset.shuffle(seed=42).remove_columns(
+#     ["source_prompt", "ability", "type", "level"]
+# )
 
-combined_dataset.to_parquet(local_dir + "train_combined.parquet")
+# combined_dataset.to_parquet(local_dir + "train_combined.parquet")
